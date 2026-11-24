@@ -1,0 +1,4 @@
+#!/bin/sh
+# Enforces the asset policy on every commit. Install with: cargo xtask install-hooks
+cd "$(dirname "$0")/.." || exit 1
+exec cargo xtask policy --staged

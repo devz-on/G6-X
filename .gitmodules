@@ -1,0 +1,8 @@
+[submodule "xcl"]
+	path = upstream/xcl
+	url = https://github.com/ivall/xcl.git
+	shallow = true
+[submodule "leonida"]
+	path = upstream/leonida
+	url = https://github.com/ubiquitarianism/leonida.git
+	shallow = true
