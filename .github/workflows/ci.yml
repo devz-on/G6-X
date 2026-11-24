@@ -49,7 +49,8 @@ jobs:
           $devShell = Join-Path $install 'Common7\Tools\Launch-VsDevShell.ps1'
           & $devShell -Arch amd64 -HostArch amd64 -SkipAutomaticLocation -NoLogo
           Get-Command cl.exe -ErrorAction Stop | Out-Null
-          cmake -S runtime -B runtime/build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLEONIDA_REQUIRE_XMA2_DECODER=ON
+          # The Rust static decoder uses WaitOnAddress and WakeByAddress on newer toolchains.
+          cmake -S runtime -B runtime/build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLEONIDA_REQUIRE_XMA2_DECODER=ON -DCMAKE_EXE_LINKER_FLAGS=/DEFAULTLIB:Synchronization.lib
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build runtime/build --parallel --target gta6rt gta6rt_tls_host tiny_game file_system_test acphal_test ws2_offline_test
 
