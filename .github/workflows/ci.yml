@@ -1,0 +1,74 @@
+name: G6-X CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows builds and compatibility checks
+    runs-on: windows-2025
+    timeout-minutes: 60
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_TERM_COLOR: always
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Set up stable Rust for upstream builds
+        run: |
+          rustup toolchain install stable --profile minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup default stable
+
+      - name: Test the Python CLI
+        run: python -m unittest discover -s tests
+
+      - name: Build and test the G6-X native runtime
+        working-directory: runtime
+        run: |
+          cargo build --locked -p g6x-runtime
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --locked --workspace
+
+      - name: Build and test XCL
+        working-directory: upstream/xcl
+        # This test expects Gaming Services and a hardware GPU.
+        run: ./scripts/test.ps1 --skip test_title_runs_and_game_folder_is_untouched
+
+      - name: Build the Leonida loader and synthetic tests
+        working-directory: upstream/leonida
+        run: |
+          cmake -S runtime -B runtime/build -G 'Visual Studio 17 2022' -A x64 -DLEONIDA_REQUIRE_XMA2_DECODER=ON
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build runtime/build --config RelWithDebInfo --parallel --target gta6rt gta6rt_tls_host tiny_game file_system_test acphal_test ws2_offline_test
+
+      - name: Test the Leonida loader and shims
+        working-directory: upstream/leonida
+        run: ctest --test-dir runtime/build -C RelWithDebInfo -R '^(file_system|run_tiny_game|acphal|ws2_offline)$' --no-tests=error --output-on-failure --timeout 90
+
+      - name: Compare PE imports across all three backends
+        run: |
+          $output = python g6x.py inspect "$env:SystemRoot\System32\whoami.exe" --backend all --runtime-bin runtime/target/debug/g6x-runtime.exe --xcl-bin upstream/xcl/target/debug/xcl.exe --json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $report = $output | ConvertFrom-Json
+          foreach ($backend in @('leonida', 'runtime', 'xcl')) {
+            $entry = $report.imports | Where-Object { $_.status.PSObject.Properties.Name -contains $backend } | Select-Object -First 1
+            if (-not $entry) { throw "No imports reported by $backend" }
+          }
