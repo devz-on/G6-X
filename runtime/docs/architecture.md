@@ -89,6 +89,11 @@ removes EXEC: lane masks become per-lane booleans, wave-wide mask tests
 become per-lane branches, and vector instructions keep a guard only where
 a lane can reach them with its EXEC bit clear. `victory_shader::resource`
 traces each descriptor and scalar memory address to the root parameter it
-comes from (table, heap, root descriptor or constant). `g6x-runtime translate`
-runs every shader it finds (containers, SGD5 files) through these and
-lists what they cannot handle yet.
+comes from (table, heap, root descriptor or constant). When a waterfall
+loop reads a descriptor from the first active lane with
+`v_readfirstlane_b32`, the translator traces the value back to each
+lane’s load, conditional move or branch. It then uses a non-uniform
+heap index to access each lane’s descriptor in one pass.
+
+`g6x-runtime translate` runs the shaders it finds in containers and
+SGD5 files through the translator and reports unsupported cases.
